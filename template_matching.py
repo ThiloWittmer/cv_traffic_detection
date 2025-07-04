@@ -84,7 +84,6 @@ def match_templates(img: MatLike) -> list[tuple[Sign, BoundingBox]]:
                 if inliers / len(mask) < 0.6:
                     continue
 
-                # # Only now visualize the matches
                 # img_matches = cv.drawMatches(
                 #     template_img, kp_temp,
                 #     img_gray, kp_img,

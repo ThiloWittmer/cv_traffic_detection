@@ -5,7 +5,7 @@ import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
 from template_matching import match_templates
-from junction_detection import junction_in_sight
+from junction_detection_ml import junction_in_sight
 
 #for type-hints
 MatLike = np.ndarray 
@@ -141,6 +141,10 @@ def get_image_crop(img:MatLike, box_cutout: BoundingBox) -> MatLike:
     x,y,w,h = box_cutout
     return img[y : y+h, x : x+w]
 
+def car_is_infront() -> bool:
+    #TODO implement
+    return False
+
 def process_scene(turn:str, img_paths:list[str]) -> list[dict]:
 
     return []
@@ -160,36 +164,36 @@ def main():
     #         print(f"{match[0]}: {match[1]}")
     
     # TEST Kreuzung erkennen
-    # for k, imgs in scenes.items():
-    #     if imgs:
-    #         for i, img in enumerate(imgs):
-    #             img = cv.imread(img)    
-    #             print(f"{i}: {junction_in_sight(img, visualize=True)}")
-
+    for k, imgs in scenes.items():
+        if imgs:
+            for i, img in enumerate(imgs):
+                img = cv.imread(img)    
+                print(f"{i}: {junction_in_sight(img, visualize=True)}")
+ 
 
     # TEST ampel farbe erkennen
-    scene = scenes.get("Szene_3")
-    if scene:
-        for img_path in scene:
-            img = cv.imread(img_path)
-            cv.imshow("test", img)
-            detected_objects = object_detection([img_path])
-            detected_traffic_lights = [tl[1] for tl in detected_objects[0] if tl[0] == 'traffic light']
-            cols = []
-            for tl in detected_traffic_lights:
-                cropped_tl = get_image_crop(img, tl)
-                # cv.imshow("m", cropped_tl)
-                # cv.waitKey()
-                # cv.destroyAllWindows()
-                col = get_traffic_light_color(cropped_tl)
-                if (col):
-                    cols.append(col)
-            if (len(set(cols))== 1): 
-                print(cols[0])
+    # scene = scenes.get("Szene_3")
+    # if scene:
+    #     for img_path in scene:
+    #         img = cv.imread(img_path)
+    #         cv.imshow("test", img)
+    #         detected_objects = object_detection([img_path])
+    #         detected_traffic_lights = [tl[1] for tl in detected_objects[0] if tl[0] == 'traffic light']
+    #         cols = []
+    #         for tl in detected_traffic_lights:
+    #             cropped_tl = get_image_crop(img, tl)
+    #             # cv.imshow("m", cropped_tl)
+    #             # cv.waitKey()
+    #             # cv.destroyAllWindows()
+    #             col = get_traffic_light_color(cropped_tl)
+    #             if (col):
+    #                 cols.append(col)
+    #         if (len(set(cols))== 1): 
+    #             print(cols[0])
 
-            # cv.imshow(str(i), cropped_tl)
-            cv.waitKey()
-            cv.destroyAllWindows()
+    #         # cv.imshow(str(i), cropped_tl)
+    #         cv.waitKey()
+    #         cv.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
