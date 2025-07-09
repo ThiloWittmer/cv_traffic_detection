@@ -4,8 +4,9 @@ from enum import Enum
 import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
-from template_matching import match_templates
+from template_matching import match_templates, sign_verification
 from junction_detection_ml import junction_in_sight
+from sign import Sign
 
 #for type-hints
 MatLike = np.ndarray 
@@ -23,17 +24,6 @@ for scene in scenes_tmp:
     scenes[k] = scene
 current_speed_limit = 50
 result = {}
-
-class Sign(Enum):
-    ZONE_30 =           1
-    ZONE_30_ENDE =      2
-    STOP =              3
-    VORF =              4
-    VORF_GEW =          5
-    VORF_OBEN_LINKS =   6
-    VORF_OBEN_RECHTS =  7
-    VORF_UNTEN_LINKS =  8
-    VORF_UNTEN_RECHTS = 9
 
 class TrafficColor(Enum):
     RED =           1
@@ -76,8 +66,6 @@ def object_detection(img_paths: list[str]) -> list[list[tuple[str, BoundingBox]]
     
     return results_all_images
 
-def sign_verification(img:MatLike, bounding_box:BoundingBox):
-    return
 
 def colorPresent(mask: MatLike) -> bool:
     PRESENT_THRESHHOLD = 30
@@ -164,12 +152,18 @@ def main():
     #         print(f"{match[0]}: {match[1]}")
     
     # TEST Kreuzung erkennen
-    for k, imgs in scenes.items():
-        if imgs:
-            for i, img in enumerate(imgs):
-                img = cv.imread(img)    
-                print(f"{i}: {junction_in_sight(img, visualize=True)}")
- 
+    # for k, imgs in scenes.items():
+    #     if imgs:
+    #         for i, img in enumerate(imgs):
+    #             img = cv.imread(img)    
+    #             print(f"{i}: {junction_in_sight(img, visualize=True)}")
+
+    img = cv.imread("Project_images/templates/schild_zone_30_ende.png")
+    cv.imshow('org', img)
+    cv.waitKey()
+    cv.destroyAllWindows()
+    
+    print(sign_verification(img, sign = Sign.ZONE_30_ENDE))
 
     # TEST ampel farbe erkennen
     # scene = scenes.get("Szene_3")

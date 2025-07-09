@@ -4,22 +4,13 @@ from enum import Enum
 from pathlib import Path
 MatLike = np.ndarray 
 BoundingBox = tuple[int, int, int, int]
+from sign import Sign
+from matplotlib import pyplot as plt
 
 templates = [str(f) for f in Path('Project_images/templates').iterdir() if f.is_file() and f.suffix == '.png']
 
 sift = cv.SIFT.create()
 bf = cv.BFMatcher(cv.NORM_L2, crossCheck=False)
-
-class Sign(Enum):
-    ZONE_30 =           1
-    ZONE_30_ENDE =      2
-    STOP =              3
-    VORF =              4
-    VORF_GEW =          5
-    VORF_OBEN_LINKS =   6
-    VORF_OBEN_RECHTS =  7
-    VORF_UNTEN_LINKS =  8
-    VORF_UNTEN_RECHTS = 9
 
 TEMPLATE_TO_SIGN = {
     "stop": Sign.STOP,
@@ -33,6 +24,9 @@ TEMPLATE_TO_SIGN = {
     "vorfahrt_von_unten_nach_rechts": Sign.VORF_UNTEN_RECHTS,
     # Add more as needed
 }
+
+ZONE_RED_LOW = np.array([int(350/2), int(62*2.55), int(50*2.55)])
+ZONE_RED_HIGH = np.array([int(360/2), int(95*2.55), int(80*2.55)])
 
 # Precompute template SIFT features
 CACHED_TEMPLATES = []
@@ -105,3 +99,15 @@ def match_templates(img: MatLike) -> list[tuple[Sign, BoundingBox]]:
 
 
     return matches_found
+
+def sign_verification(img:MatLike, sign:Sign) -> bool:
+    """please just pass in the cropped sign"""
+
+    img_hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+
+    if sign == Sign.ZONE_30_ENDE:
+        mask = cv.inRange(img_hsv, ZONE_RED_LOW, ZONE_RED_HIGH)
+        flat = mask.flatten().astype(np.float32)
+        avg = np.average(flat)
+        return bool(avg < 10)
+    return False
