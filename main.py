@@ -5,12 +5,14 @@ import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
 from template_matching import match_templates, sign_verification
-from junction_detection_ml import junction_in_sight
-from sign import Sign
+from junction_detection_conv import junction_in_sight
+from enums import Sign
 
 #for type-hints
 MatLike = np.ndarray 
 BoundingBox = tuple[int, int, int, int]
+"""[x,y,h,w]"""
+
 
 yolo_model = YOLO("yolov8l.pt")
 
@@ -140,30 +142,31 @@ def process_scene(turn:str, img_paths:list[str]) -> list[dict]:
 
 def main():
     # TEST template matching
-    # imgs = scenes.get("Szene_4")
-    # if img:
-    #     img = img[4]
-    #     test = "Project_images/templates/stop.png"
-    #     img = cv.imread(img)
-    #     cv.imshow("test", img)
-    #     cv.waitKey()
-    #     cv.destroyAllWindows()
-    #     for match in match_templates(img):
-    #         print(f"{match[0]}: {match[1]}")
+    imgs = scenes.get("Szene_5")
+    if imgs:
+        img = imgs[4]
+        test = "Project_images/templates/stop.png"
+        img = cv.imread(img)
+        cv.imshow("test", img)  
+        cv.waitKey()
+        cv.destroyAllWindows()
+        w, h = img.shape[:2] 
+        for match in match_templates(get_image_crop(img, (int(w/2), 0, h,w))):
+            print(f"{match[0]}: {match[1]}")
     
     # TEST Kreuzung erkennen
     # for k, imgs in scenes.items():
-    #     if imgs:
+    #     if imgs: 
     #         for i, img in enumerate(imgs):
     #             img = cv.imread(img)    
     #             print(f"{i}: {junction_in_sight(img, visualize=True)}")
 
-    img = cv.imread("Project_images/templates/schild_zone_30_ende.png")
-    cv.imshow('org', img)
-    cv.waitKey()
-    cv.destroyAllWindows()
+    # img = cv.imread("Project_images/templates/vorfahrt.png")
+    # cv.imshow('org', img)
+    # cv.waitKey()
+    # cv.destroyAllWindows()
     
-    print(sign_verification(img, sign = Sign.ZONE_30_ENDE))
+    # print(sign_verification(img, sign = Sign.VORF))
 
     # TEST ampel farbe erkennen
     # scene = scenes.get("Szene_3")
