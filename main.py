@@ -1,3 +1,10 @@
+"""
+    @author:    Thilo Wittmer
+
+    Python Anwendung, um aus Verkehrsszenen die richtigen Fahranweisungen zu berechnen
+
+"""
+
 from map_detection import detect_turns
 from pathlib import Path
 from enum import Enum
@@ -6,12 +13,13 @@ import numpy as np
 from ultralytics import YOLO
 from template_matching import match_templates, sign_verification
 from junction_detection_conv import junction_in_sight
-from enums import Sign
+from enums import Sign, Direction, TrafficColor, YoloNames
+from state import State
 
 #for type-hints
 MatLike = np.ndarray 
 BoundingBox = tuple[int, int, int, int]
-"""[x,y,h,w]"""
+"""[x,y,w,h]"""
 
 
 yolo_model = YOLO("yolov8l.pt")
@@ -23,15 +31,17 @@ stadtkarte = 'Project_images/stadtkarte/stadtplan_ohne_gebaeude.png'
 scenes: dict[str,list[str]] = {}
 for scene in scenes_tmp:
     k = scene[0].split('/')[1]
+    scene = sorted(scene, key=lambda x: int(x.split('/')[-1].split('.')[0]))
     scenes[k] = scene
 current_speed_limit = 50
 result = {}
 
-class TrafficColor(Enum):
-    RED =           1
-    YELLOW =        2
-    RED_YELLOW =    3
-    GREEN =         4
+state = State(
+    current_speed=50,
+    direction_at_next_junction=Direction.GERADEAUS,
+    current_direction=Direction.GERADEAUS,
+    zone_30=False,
+)
 
 RED_OFF_LOW = np.array([int(350/2), int(60*2.55), int(38*2.55)])
 RED_OFF_HIGH= np.array([int(359/2), int(90*2.55), int(50*2.55)])
@@ -135,24 +145,142 @@ def car_is_infront() -> bool:
     #TODO implement
     return False
 
-def process_scene(turn:str, img_paths:list[str]) -> list[dict]:
+def car_is_left() -> bool:
+    #TODO implement
 
-    return []
+    return False
+
+def process_scene(turn:Direction, img_paths:list[str]) -> list[dict] | None:
+    """returns list of dict where each dict represents one image in the scene\n
+        each dict has the following format:\n
+        {
+            \"bildname\":           \"0.png\",
+            \"geschwindigkeit\":    50,
+            \"richtung\":           \"links\"
+        }
+    """
+
+    results_scene = []
+
+    state.direction_at_next_junction = turn
+
+    state.current_direction = Direction.GERADEAUS
+
+    if state.zone_30:
+        state.current_speed = 30
+    else:
+        state.current_speed = 50
+    
+    #liste, jedes element enthält ergebnisse für ein bild
+    detected_objects = object_detection(img_paths)
+
+    #hier jedes Bild durchgehen
+    for i, det_obj in enumerate(detected_objects):
+        print(f"### {i} ###")
+        img: MatLike | None = cv.imread(img_paths[i])
+
+        if img is None:
+            raise IOError("Bild konnte nicht gelesen werden")
+        
+        ampel_det: list[tuple[str, BoundingBox]] = []
+        fahrzeug_det: list[tuple[str, BoundingBox]] = []
+        stop_det: list[tuple[str, BoundingBox]] = []
+
+        for det in det_obj:
+            match(det[0]):
+                case YoloNames.AMPEL.value:
+                    ampel_det.append(det)
+                case YoloNames.STOP.value:
+                    stop_det.append(det)
+                case YoloNames.AUTO.value | YoloNames.LKW.value | YoloNames.MOTORRAD.value | YoloNames.BUS.value:
+                    fahrzeug_det.append(det)
+        
+
+        print(f"Erkannte fahrzeuge: {[f[0] for f in fahrzeug_det]}")
+        print(f"Erkannte ampeln: {len(ampel_det)}")
+        print(f"Erkannte stopschilder: {len(stop_det)}")
+
+        #ampeln erkannt
+        if ampel_det:
+            ampel_gruen = handle_traffic_light(img, ampel_det)
+            
+            if ampel_gruen:
+
+                match(turn):
+                    case Direction.LINKS:
+                        if car_is_left():
+                            state.current_speed = 0
+                    case Direction.RECHTS:
+                        state.current_speed = 10
+                    case Direction.GERADEAUS:
+                        
+                        print()
+
+    return None
+
+def handle_traffic_light(img, ampel_det) -> bool:
+    #threshhold for slowing down    
+    AMPEL_AREA_THRESHHOLD_S = 2000
+    #threshhold for stopping
+    AMPEL_AREA_THRESHHOLD_L = 15000
+
+    ampel_gruen = False
+    state.current_direction = state.direction_at_next_junction
+    farben: list[TrafficColor] = []
+    ampel_groesse: list[int] = []
+    for ampel in ampel_det:
+        farbe: TrafficColor | None = get_traffic_light_color(get_image_crop(img, ampel[1]))
+                #bb w*h
+        flaeche = int(ampel[1][2]*ampel[1][3])
+        ampel_groesse.append(flaeche)
+        if farbe:
+            farben.append(farbe)
+            
+    aktuelle_ampelfarbe: TrafficColor
+    groesste_ampel: int = max(ampel_groesse)
+
+
+    if not len(set(farben)) == 1:
+        print("Ampelfarben mismatch")
+        farben_count: dict[TrafficColor, int] = {}
+        for farbe in farben:
+            if not farbe in farben_count.keys():
+                farben_count[farbe] = 1
+            else:
+                farben_count[farbe] += 1
+        aktuelle_ampelfarbe = max(farben_count, key=lambda k: farben_count[k])
+    else:
+        aktuelle_ampelfarbe = set(farben).pop()
+            
+    match(aktuelle_ampelfarbe):
+        case TrafficColor.RED | TrafficColor.RED_YELLOW | TrafficColor.YELLOW:
+            if groesste_ampel > AMPEL_AREA_THRESHHOLD_S and groesste_ampel < AMPEL_AREA_THRESHHOLD_L:
+                state.current_speed = 10
+            if groesste_ampel > AMPEL_AREA_THRESHHOLD_L:
+                state.current_speed = 0
+        case TrafficColor.GREEN:
+            ampel_gruen = True
+    return ampel_gruen
 
 
 def main():
+    process_scene(turn= Direction.LINKS, img_paths=scenes['Szene_3'])
+
     # TEST template matching
-    imgs = scenes.get("Szene_5")
-    if imgs:
-        img = imgs[4]
-        test = "Project_images/templates/stop.png"
-        img = cv.imread(img)
-        cv.imshow("test", img)  
-        cv.waitKey()
-        cv.destroyAllWindows()
-        w, h = img.shape[:2] 
-        for match in match_templates(get_image_crop(img, (int(w/2), 0, h,w))):
-            print(f"{match[0]}: {match[1]}")
+    # imgs = scenes.get("Szene_5")
+    # if imgs:
+    #     img = imgs[4]
+    #     test = "Project_images/templates/stop.png"
+    #     img = cv.imread(img)
+    #     if img is not None:
+    #         cv.imshow("test", img)
+    #         cv.waitKey()
+    #         cv.destroyAllWindows()
+    #         w, h = img.shape[:2] 
+    #         for match in match_templates(get_image_crop(img, (int(w/2), 0, h,w))):
+    #             print(f"{match[0]}: {match[1]}")
+    #     else:
+    #         print(f"Failed to load image: {imgs[4]}")
     
     # TEST Kreuzung erkennen
     # for k, imgs in scenes.items():

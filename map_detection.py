@@ -7,6 +7,7 @@ from igraph import Graph
 from skimage.graph import route_through_array
 from sklearn.cluster import DBSCAN
 import json
+from enums import Direction
 
 
 def find_endpoints_and_junctions(skel_img):
@@ -136,8 +137,8 @@ def insert_special_node(g, layout, skel, special_coord):
     g.add_edge(new_idx, tgt, weight=weight2)
     return new_idx, layout
 
-def get_turn_sequence(layout, path):
-    directions = []
+def get_turn_sequence(layout, path) -> list[Direction]:
+    directions: list[Direction] = []
     for i in range(1, len(path)-1):
         prev = np.array(layout[path[i-1]])
         curr = np.array(layout[path[i]])
@@ -147,20 +148,20 @@ def get_turn_sequence(layout, path):
         angle = np.arctan2(v2[1], v2[0]) - np.arctan2(v1[1], v1[0])
         angle = (angle + np.pi) % (2 * np.pi) - np.pi  # auf [-pi, pi]
         if abs(angle) < np.pi/6:
-            directions.append("geradeaus")
+            directions.append(Direction.GERADEAUS)
         elif angle < 0:
-            directions.append("links")
+            directions.append(Direction.LINKS)
         else:
-            directions.append("rechts")
+            directions.append(Direction.RECHTS)
     return directions
 
-def detect_turns(img_path: str) -> list[str]:
+def detect_turns(img_path: str) -> list[Direction] | None:
     img = cv.imread(img_path)
-    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-    if gray is None:
-        print('kein Bild')
-        return []
+    if img is not None:
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+    else:
+        print("konnte bild in detect_turns nicht laden")
+        return None
 
     canny1 = cv.Canny(gray, 50, 200, None, 3)
 
@@ -316,7 +317,7 @@ def detect_turns(img_path: str) -> list[str]:
         path = g.get_shortest_paths(start_idx, to=ziel_idx, weights="weight", output="vpath")[0]
 
         # path = path[::-1]        
-        turns = get_turn_sequence(layout, path)
+        turns: list[Direction] = get_turn_sequence(layout, path)
         print(turns)
         
         out = {}

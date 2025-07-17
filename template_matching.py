@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 from enum import Enum
 from pathlib import Path
+import easyocr
 MatLike = np.ndarray 
 
 BoundingBox = tuple[int, int, int, int]
@@ -14,6 +15,8 @@ templates = [str(f) for f in Path('Project_images/templates').iterdir() if f.is_
 
 sift = cv.SIFT.create(nfeatures=2000)
 bf = cv.BFMatcher(cv.NORM_L2, crossCheck=False)
+
+reader = easyocr.Reader(['de', 'en'])
 
 TEMPLATE_TO_SIGN = {
     "stop": Sign.STOP,
@@ -42,9 +45,9 @@ for template_path in templates:
     if sign_enum is None:
         continue
     template_img = cv.imread(template_path)
-    template_img_gray = cv.cvtColor(template_img, cv.COLOR_BGR2GRAY)
     if template_img is None:
         continue
+    template_img_gray = cv.cvtColor(template_img, cv.COLOR_BGR2GRAY)
     CACHED_TEMPLATES.append((template_img, sign_enum))
     kp_temp, des_temp = sift.detectAndCompute(template_img_gray, np.ones_like(template_img_gray, dtype=np.uint8))
     if des_temp is None:
@@ -156,12 +159,20 @@ def sign_verification(img:MatLike, sign:Sign) -> bool:
     """please just pass in the cropped sign"""
 
     img_hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    
+    text_results = reader.readtext(img)
+    text_results = [text.upper() for (bbox, text, prob) in text_results if float(prob) > 0.5]
+
 
     if sign == Sign.ZONE_30_ENDE:
-        mask = cv.inRange(img_hsv, ZONE_RED_LOW, ZONE_RED_HIGH)
-        flat = mask.flatten().astype(np.float32)
-        avg = np.average(flat)
-        return bool(avg < 10)
+        if not "ZONE" in text_results:
+            return False        
+        return has_zone_red(img)
+    
+    if sign == Sign.ZONE_30:
+        if not "ZONE" in text_results:
+            return False
+        return not has_zone_red(img)
     
     if sign == Sign.VORF:
         mask = cv.inRange(img_hsv, VORF_YEL_LOW, VORF_YEL_HIGH)
@@ -170,3 +181,12 @@ def sign_verification(img:MatLike, sign:Sign) -> bool:
         return bool(avg > 10)
 
     return False
+
+
+def has_zone_red(img:MatLike) -> bool:
+    img_hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    mask = cv.inRange(img_hsv, ZONE_RED_LOW, ZONE_RED_HIGH)
+    flat = mask.flatten().astype(np.float32)
+    avg = np.average(flat)
+
+    return bool(avg > 10)
